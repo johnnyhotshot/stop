@@ -1,4 +1,5 @@
 import cv2
+import time
 from threading import Thread
 
 cam = cv2.VideoCapture(0)
@@ -9,7 +10,8 @@ cam.set(4,480)
 comprWidth = 160
 comprHeight = 120
 
-avgImageCount = 2500
+changeThreshold = 0.01
+quitting = False
 
 def getAverageImage(imageCount):
     pictures = []
@@ -40,66 +42,66 @@ def getPercentChange(current, last):
 
 def imageHasPerson(background, image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    image = cv2.GaussianBlur(image, (5, 5), 0)
+    image = cv2.GaussianBlur(image, (7, 7), 0)
+    background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+    background = cv2.GaussianBlur(background, (7, 7), 0)
     imageDifference = cv2.absdiff(background, image)
     ret, imageDifference = cv2.threshold(imageDifference, 127, 255, cv2.THRESH_BINARY)
     imageDifference, contours = cv2.findContours(imageDifference,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-    return contours is not None
+    if contours is not None:
+        for box in contours[0]:
+            if abs(box[0] - box[2]) * abs(box[1] - box[3]) > 6:
+                return True
+    return False
 
 class DisplayThread(Thread):
     def __init__(self):
         Thread.__init__(self)
 
     def run(self):
-        global frame
-        global lastFrame
-
+        global quitting
         while True:
-            try:
-                cv2.imshow("Current Frame", frame)
-            except:
-                pass
-            cv2.imshow("Last Frame", lastFrame)
+            ret, frame = cam.read()
+            
+            cv2.imshow("Current Frame", frame)
             
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
+        quitting = True
+        cam.release()
+        cv2.destroyAllWindows()
 
-class ImageAveragingThread(Thread):
+class BoardChangeDetectionThread(Thread):
     def __init__(self):
         Thread.__init__(self)
 
     def run(self):
-        global frame
-        global lastFrame
-
-        while True:
-            frame = getAverageImage(avgImageCount)
-            print(getPercentChange(frame, lastFrame))
-
-            lastFrame = frame
+        global background
+        global lastRecordedFrame
+        global quitting
+        
+        while not quitting:
+            ret, frame = cam.read()
+            if not imageHasPerson(background.copy(), frame.copy()):
+                change = getPercentChange(frame, lastRecordedFrame)
+                print(change)
+                if change > changeThreshold:
+                    print("[ ] == Recording new board! - " + str(time.time()))
+                    lastRecordedFrame = frame
+                else:
+                    print("[XXX] == Not enough change for new board")
+            else:
+                print("[X] == Tried to record, but a person was in the way!")
+            
             
             
         
-        cam.release()
-        cv2.destroyAllWindows()
-
-#lastFrame = getAverageImage(avgImageCount)
-frame = []
-
-display = DisplayThread()
-#display.start()
-average = ImageAveragingThread()
-#average.start()
 
 background = getAverageImage(30)
-background = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
-background = cv2.GaussianBlur(background, (5, 5), 0)
+lastRecordedFrame = background
 
-while True:
-    ret, frame = cam.read()
-
-    print(imageHasPerson(background, frame))
-    
-    cv2.imshow("Camera", frame)
-    cv2.waitKey(1)
+display = DisplayThread()
+display.start()
+average = BoardChangeDetectionThread()
+average.start()
     
