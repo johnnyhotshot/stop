@@ -13,6 +13,8 @@ comprHeight = 120
 changeThreshold = 0.01
 quitting = False
 
+nextImageID = 0
+
 def getAverageImage(imageCount):
     pictures = []
     print("Collecting image input...")
@@ -54,6 +56,11 @@ def imageHasPerson(background, image):
                 return True
     return False
 
+def recordImage(image):
+    global nextImageID
+    cv2.imwrite("output/out" + str(nextImageID) + ".png", image)
+    nextImageID += 1
+
 class DisplayThread(Thread):
     def __init__(self):
         Thread.__init__(self)
@@ -87,11 +94,14 @@ class BoardChangeDetectionThread(Thread):
                 print(change)
                 if change > changeThreshold:
                     print("[ ] == Recording new board! - " + str(time.time()))
+                    recordImage(frame)
                     lastRecordedFrame = frame
                 else:
                     print("[XXX] == Not enough change for new board")
             else:
                 print("[X] == Tried to record, but a person was in the way!")
+
+            time.sleep(10)
             
             
             
@@ -99,6 +109,7 @@ class BoardChangeDetectionThread(Thread):
 
 background = getAverageImage(30)
 lastRecordedFrame = background
+recordImage(background)
 
 display = DisplayThread()
 display.start()
