@@ -1,8 +1,11 @@
 """
-    STOP: Whiteboard Photo Recording
+    STOP: Shitpost Tracking Objective Photographer
     Watches whiteboards over time to catalog significant changes (takes pictures of what people do on the whiteboard)
 
     by: Johnny Puskar
+
+    *** Sign my Packet :) ***
+    
 """
 import cv2
 import time
