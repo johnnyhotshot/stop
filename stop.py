@@ -186,7 +186,8 @@ class BoardChangeDetectionThread(Thread):
                 print("[X] == Tried to record, but a person was in the way!")
 
             # Wait until the next cycle to look at the board again
-            time.sleep(10 """TODO: MAKE THIS CONFIGURABLE THROUGH A CONFIG FILE""")
+            # TODO: MAKE THIS CONFIGURABLE THROUGH A CONFIG FILE
+            time.sleep(10)
             
 # Get the average over one second to set as the current background frame
 background = getAverageImage(30)
