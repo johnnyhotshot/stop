@@ -10,6 +10,7 @@
 import cv2
 import time
 from threading import Thread
+import numpy as np
 
 """
     Setting up camera - creating camera and camera size variables
@@ -29,7 +30,6 @@ cam.set(4,height)
      
      delayOver:        if the board delay has been run or not (will be False if a BoardCheckDelay thread is currently running)
 """
-changeThreshold = 0.01
 quitting = False
 nextImageID = 0
 delayOver = True
@@ -41,6 +41,7 @@ delayOver = True
 """
 picDelay = 60
 cameraName = "STOP-Camera"
+changeThreshold = 0.01
 
 def readConfig():
     global picDelay
@@ -57,7 +58,12 @@ def readConfig():
             elif line[:line.find("=")].strip() == "picDelay":
                 picDelay = int(line[line.find("=")+1:])
             elif line[:line.find("=")].strip() == "cameraName":
-                cameraName = line[line.find("=")+1:]
+                cameraName = line[line.find("=")+1:].strip()
+                print(":"+cameraName)
+            elif line[:line.find("=")].strip() == "changeThreshold":
+                newChangeThreshold = float(line[line.find("=")+1:])
+                if newChangeThreshold >= 0 and newChangeThreshold <= 1:
+                    changeThreshold = newChangeThreshold
         except:
             pass
     config.close()
@@ -160,6 +166,7 @@ def recordImage(image):
     global nextImageID
     # Write image to file with nextImageID in the file name
     cv2.imwrite("output/" + cameraName + "_" + str(nextImageID) + ".png", image)
+    cv2.imwrite("output/test.png", image)
     # Increment nextImageID for the next time
     nextImageID += 1
 
