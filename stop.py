@@ -26,11 +26,43 @@ cam.set(4,height)
      changeThreshold:  the percentage the image must have changed by to be significant enough to be recorded
      quitting:         boolean to quit program, if true then program loops in threads should stop
      nextImageID:      number appended to saved image file
+     
+     delayOver:        if the board delay has been run or not (will be False if a BoardCheckDelay thread is currently running)
 """
 changeThreshold = 0.01
 quitting = False
 nextImageID = 0
+delayOver = True
 
+"""
+    Config file variables (global but can be set through stop.cfg file, set to default values)
+     picDelay:         amount of seconds in between each time the board is checked (in seconds)
+     cameraName:       name added to photo files to differentiate them from others
+"""
+picDelay = 60
+cameraName = "STOP-Camera"
+
+def readConfig():
+    global picDelay
+    global cameraName
+    try:
+        config = open("stop.cfg","r")
+    except:
+        print("Config file not found. Using default values...")
+        return
+    for line in config:
+        try:
+            if line[0] == "#":
+                pass
+            elif line[:line.find("=")].strip() == "picDelay":
+                picDelay = int(line[line.find("=")+1:])
+            elif line[:line.find("=")].strip() == "cameraName":
+                cameraName = line[line.find("=")+1:]
+        except:
+            pass
+    config.close()
+
+readConfig()
 
 def getAverageImage(imageCount: int):
     """
@@ -127,7 +159,7 @@ def recordImage(image):
     # Designate nextImageID to be the global variable
     global nextImageID
     # Write image to file with nextImageID in the file name
-    cv2.imwrite("output/out" + str(nextImageID) + ".png", image)
+    cv2.imwrite("output/" + cameraName + "_" + str(nextImageID) + ".png", image)
     # Increment nextImageID for the next time
     nextImageID += 1
 
@@ -167,32 +199,61 @@ class BoardChangeDetectionThread(Thread):
         # Designates global variables
         global background
         global quitting
-
+        
         # Run until global quitting bool has been set to true (allows quitting from other threads)
         while not quitting:
-            # Get current camera data
-            ret, frame = cam.read()
-            # If the image doesn't contain a person or object blocking the board, continue. Otherwise - current frame data goes unused
-            if not imageHasPerson(background.copy(), frame.copy()):
-                # Get the percent change between the current frame and the last recorded frame
-                change = getPercentChange(frame, background)
-                print(change)
-                # Checks if the change between the two frames is considered significant
-                if change > changeThreshold:
-                    print("[ ] == Recording new board! - " + str(time.time()))
-                    # Save current frame to file
-                    recordImage(frame)
-                    # Set the background to the current frame
-                    background = frame
+            if delayOver:
+                # Creates new delay thread to manage the delay before then next board check
+                delay = BoardCheckDelay()
+                delay.start()
+                # Get current camera data
+                ret, frame = cam.read()
+                # If the image doesn't contain a person or object blocking the board, continue. Otherwise - current frame data goes unused
+                if not imageHasPerson(background.copy(), frame.copy()):
+                    # Get the percent change between the current frame and the last recorded frame
+                    change = getPercentChange(frame, background)
+                    print(change)
+                    # Checks if the change between the two frames is considered significant
+                    if change > changeThreshold:
+                        print("[ ] == Recording new board! - " + str(time.time()))
+                        # Save current frame to file
+                        recordImage(frame)
+                        # Set the background to the current frame
+                        background = frame
+                    else:
+                        print("[XXX] == Not enough change for new board")
                 else:
-                    print("[XXX] == Not enough change for new board")
-            else:
-                print("[X] == Tried to record, but a person was in the way!")
+                    print("[X] == Tried to record, but a person was in the way!")
+                
 
-            # Wait until the next cycle to look at the board again
-            # TODO: MAKE THIS CONFIGURABLE THROUGH A CONFIG FILE
-            time.sleep(10)
-            
+class BoardCheckDelay(Thread):
+    """
+        Thread class for managing delay between images
+        (used instead of time.sleep() so that board analysis runtime isn't included in delay)
+
+        Uses global picDelay variable for timing and sets global delayOver boolean
+    """
+    def __init__(self):
+        Thread.__init__(self)
+
+    def run(self):
+        # Designating global variables
+        global picDelay
+        global delayOver
+        # Setting delayOver to False while the delay runs
+        delayOver = False
+        print("Running delay...")
+        # Using for loop to calculate delay in second increments to allow for quitting mid-delay
+        for i in range(picDelay):
+            # Sleep for one second
+            time.sleep(1)
+            # Break out of loop early if thread is quitting
+            if quitting:
+                break
+        # Set delayOver to True
+        delayOver = True
+        
+
 # Get the average over one second to set as the current background frame
 ret, background = cam.read()
 # Record the background
