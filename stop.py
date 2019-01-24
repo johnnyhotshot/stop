@@ -65,6 +65,8 @@ def getPercentChange(current: list, last: list):
         A pixel can change by a maximum value of 255 (white to black/black to white), which is a 100% change for that pixel
         Each pixels change is an equal part of the total images change
           == sum of [ (change in pixel value / 255) / (length * width) ] for each pixel
+
+        Only counts pixel change if it is greater than 5, any fluctuation under is disregarded
     """
     # Print out error message and return None if images are not equal size
     if len(current) != len(last) != height or len(current[0]) != len(last[0]) != width:
@@ -78,9 +80,12 @@ def getPercentChange(current: list, last: list):
     # Loop through each pixel, add their percent change to the total (divided by the area of the image)
     for y in range(height):
         for x in range(width):
-            toReturn += (abs(int(current[y][x]) - int(last[y][x])) / 255) / (height*width)
+            change = abs(int(current[y][x]) - int(last[y][x]))
+            if change > 3:
+                toReturn += (change / 255) / (height*width)
     # Return total sum
     return toReturn
+    
 
 def imageHasPerson(background: list, image: list):
     """
@@ -107,8 +112,8 @@ def imageHasPerson(background: list, image: list):
     if contours is not None:
         # Checks the size of each contour box and returns true if it is above 6
         #  Note: 6 is a mostly arbritrary number picked from testing, seems to work well enough
-        for box in contours[0]:
-            if abs(box[0] - box[2]) * abs(box[1] - box[3]) > 6:
+        for i in range(len(contours)):
+            if len(contours[i]) > 4:
                 return True
     # Returns false if there is no contours list or if the contours are not large enough
     #  to matter (typically happens with larger drawings on whiteboard or items on marker tray)
@@ -161,7 +166,6 @@ class BoardChangeDetectionThread(Thread):
     def run(self):
         # Designates global variables
         global background
-        global lastRecordedFrame
         global quitting
 
         # Run until global quitting bool has been set to true (allows quitting from other threads)
@@ -171,15 +175,15 @@ class BoardChangeDetectionThread(Thread):
             # If the image doesn't contain a person or object blocking the board, continue. Otherwise - current frame data goes unused
             if not imageHasPerson(background.copy(), frame.copy()):
                 # Get the percent change between the current frame and the last recorded frame
-                change = getPercentChange(frame, lastRecordedFrame)
+                change = getPercentChange(frame, background)
                 print(change)
                 # Checks if the change between the two frames is considered significant
                 if change > changeThreshold:
                     print("[ ] == Recording new board! - " + str(time.time()))
                     # Save current frame to file
                     recordImage(frame)
-                    # Set the last recorded frame to the current frame
-                    lastRecordedFrame = frame
+                    # Set the background to the current frame
+                    background = frame
                 else:
                     print("[XXX] == Not enough change for new board")
             else:
@@ -190,9 +194,7 @@ class BoardChangeDetectionThread(Thread):
             time.sleep(10)
             
 # Get the average over one second to set as the current background frame
-background = getAverageImage(30)
-# Set the last recorded frame to the background
-lastRecordedFrame = background
+ret, background = cam.read()
 # Record the background
 recordImage(background)
 
